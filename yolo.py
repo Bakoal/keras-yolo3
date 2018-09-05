@@ -21,6 +21,11 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 from keras.utils import multi_gpu_model
 gpu_num=1
 
+import sql #add
+from io import StringIO #add
+from io import BytesIO #add
+import io, base64 #add
+
 class YOLO(object):
     def __init__(self):
         self.model_path = 'model_data/yolo.h5' # model path or trained weights path
@@ -40,6 +45,13 @@ class YOLO(object):
 
         try:
             os.makedirs(self.images_path)
+            #os.makedirs(self.frames_path)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+
+        try:
+            #os.makedirs(self.images_path)
             os.makedirs(self.frames_path)
         except OSError as e:
             if e.errno != errno.EEXIST:
@@ -132,6 +144,16 @@ class YOLO(object):
         thickness = (image.size[0] + image.size[1]) // 300
 
         history = open('history_object_detection.txt', 'a')
+        db = 'test.db' 
+
+        outputBuffer = BytesIO()
+        image.save(outputBuffer, format='PNG')
+        imageBase64Data = outputBuffer.getvalue()
+        data = base64.b64encode(imageBase64Data)
+        outputBuffer.close
+        sql.add_record(db, data)
+
+        #sql.extr_record(db, './output', 1)
 
         for i, c in reversed(list(enumerate(out_classes))):
             predicted_class = self.class_names[c]
@@ -172,6 +194,18 @@ class YOLO(object):
                 area = (left, top, right, bottom)
                 cropped_image = image.crop(area)
                 cropped_image.save(self.object_path + class_object + '/frame_' + str(self.counter_image) + '_' + label + '.png')
+
+                outputBuffer = BytesIO()
+                cropped_image.save(outputBuffer, format='PNG')
+                imageBase64Data = outputBuffer.getvalue()
+                data = base64.b64encode(imageBase64Data)
+                outputBuffer.close
+                edit_score = '{:.2f}'.format(score)
+                sql.add_record_class(db, predicted_class)
+                sql.add_record_child(db, predicted_class, edit_score, data)
+
+                #sql.child_extr_record(db, './output', 1)
+
                 history.write('Class: ' + class_object + ' Frame: ' + str(self.counter_image) + ' Probability: ' + label + '\r\n')
 
             if not os.path.exists(self.object_path + class_object):
@@ -189,6 +223,7 @@ class YOLO(object):
         end = timer()
         print(end - start)
         image.save(self.frames_path + str(self.counter_image) + '.png')
+
         self.counter_image+=1
 
         return image
